@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>총괄생산계획 최적화 시스템</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --white: #ffffff;
+  --off:   #f7f8fa;
+  --gray1: #f0f2f5;
+  --gray2: #e2e6eb;
+  --gray3: #c8cdd6;
+  --gray4: #8b93a1;
+  --gray5: #4a5263;
+  --black: #111318;
+  --red:   #c0392b;
+  --red2:  #e74c3c;
+  --red3:  #fdecea;
+  --blue:  #1a56db;
+  --grn:   #1a7f4b;
+  --amb:   #d97706;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans KR', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--white);
+  color: var(--black);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* ── HEADER ── */
+.hdr {
+  border-bottom: 2px solid var(--black);
+  padding: 0 2rem;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--white);
+  position: sticky; top: 0; z-index: 100;
+}
+.hdr-left { display: flex; align-items: baseline; gap: 16px; }
+.hdr-title {
+  font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: var(--black);
+}
+.hdr-sub { font-size: 13px; color: var(--gray4); font-family: var(--mono); }
+.hdr-right { display: flex; align-items: center; gap: 12px; }
+.hdr-stat { display: flex; flex-direction: column; align-items: flex-end; }
+.hdr-stat-lbl { font-size: 11px; color: var(--gray4); font-family: var(--mono); letter-spacing: .03em; }
+.hdr-stat-val { font-size: 14px; font-family: var(--mono); font-weight: 600; color: var(--black); }
+.hdr-stat-val.ok  { color: var(--grn); }
+.hdr-stat-val.err { color: var(--red); }
+.divider { width: 1px; height: 28px; background: var(--gray2); }
+.run-btn {
+  background: var(--black); color: var(--white);
+  border: none; padding: 8px 22px;
+  font-size: 13px; font-weight: 500; font-family: var(--sans);
+  cursor: pointer; transition: background .15s;
+  letter-spacing: .01em;
+}
+.run-btn:hover { background: var(--gray5); }
+.run-btn:active { transform: scale(.98); }
+
+/* ── LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 52px);
+}
+
+/* ── SIDEBAR ── */
+.side {
+  border-right: 1px solid var(--gray2);
+  background: var(--off);
+  padding: 1.25rem 1rem;
+  overflow-y: auto;
+}
+.sec { margin-bottom: 1.5rem; }
+.sec-hd {
+  font-size: 12px; font-weight: 700; letter-spacing: .06em;
+  color: var(--gray4); text-transform: uppercase;
+  padding-bottom: 6px; border-bottom: 1px solid var(--gray2);
+  margin-bottom: 10px;
+}
+.d-row { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 6px; margin-bottom: 4px; }
+.d-lbl { font-size: 12px; color: var(--gray4); font-family: var(--mono); font-weight: 600; }
+.d-inp {
+  background: var(--white); border: 1px solid var(--gray2);
+  color: var(--black); font-family: var(--mono); font-size: 13px;
+  padding: 5px 8px; width: 100%; text-align: right;
+  transition: border-color .15s;
+}
+.d-inp:focus { outline: none; border-color: var(--black); }
+.m-ctrl { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.m-cnt { font-size: 11px; color: var(--gray5); font-family: var(--mono); }
+.ibtn {
+  background: var(--white); border: 1px solid var(--gray2);
+  color: var(--gray5); font-size: 16px; width: 26px; height: 26px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+.ibtn:hover { border-color: var(--black); color: var(--black); }
+.pg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pi { display: flex; flex-direction: column; gap: 3px; }
+.pl { font-size: 11px; color: var(--gray5); line-height: 1.4; font-weight: 500; }
+.pu { font-size: 9px; color: var(--gray4); }
+.p-inp {
+  background: var(--white); border: 1px solid var(--gray2);
+  color: var(--black); font-family: var(--mono); font-size: 13px;
+  padding: 5px 6px; width: 100%; text-align: right;
+  transition: border-color .15s;
+}
+.p-inp:focus { outline: none; border-color: var(--black); }
+
+/* ── MAIN ── */
+.main { display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── KPI STRIP ── */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(5,1fr);
+  border-bottom: 1px solid var(--gray2);
+  background: var(--white);
+}
+.kcard {
+  padding: 12px 16px;
+  border-right: 1px solid var(--gray2);
+  position: relative;
+}
+.kcard:last-child { border-right: none; }
+.kcard::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--gray2); transition: background .3s;
+}
+.kcard.ok::after  { background: var(--grn); }
+.kcard.warn::after{ background: var(--amb); }
+.kcard.bad::after { background: var(--red); }
+.klbl { font-size: 12px; color: var(--gray4); margin-bottom: 4px; letter-spacing: .02em; }
+.kval {
+  font-size: 24px; font-weight: 800; font-family: var(--mono);
+  color: var(--black); line-height: 1;
+}
+.kval.ok   { color: var(--grn); }
+.kval.warn { color: var(--amb); }
+.kval.bad  { color: var(--red); }
+.kunit { font-size: 12px; color: var(--gray4); margin-left: 2px; font-family: var(--sans); font-weight: 500; }
+.ktag {
+  font-size: 12px; margin-top: 4px; color: var(--gray4); font-weight: 600;
+}
+.ktag.ok   { color: var(--grn); }
+.ktag.warn { color: var(--amb); }
+.ktag.bad  { color: var(--red); font-weight: 500; }
+
+/* ── SIGNAL ROW ── */
+.sig-row {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  border-bottom: 1px solid var(--gray2);
+  background: var(--off);
+}
+.sig {
+  padding: 10px 16px; border-right: 1px solid var(--gray2);
+  display: flex; align-items: center; gap: 10px;
+}
+.sig:last-child { border-right: none; }
+.sig-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.sig-dot.ok   { background: var(--grn); }
+.sig-dot.warn { background: var(--amb); }
+.sig-dot.bad  { background: var(--red); }
+.sig-dot.off  { background: var(--gray3); }
+.sig-lbl { font-size: 12px; color: var(--gray4); letter-spacing: .02em; margin-bottom: 2px; }
+.sig-val { font-size: 18px; font-weight: 800; font-family: var(--mono); color: var(--black); }
+.sig-val.ok   { color: var(--grn); }
+.sig-val.warn { color: var(--amb); }
+.sig-val.bad  { color: var(--red); }
+.sig-val.off  { color: var(--gray3); }
+.sig-desc { font-size: 12px; color: var(--gray4); margin-top: 1px; }
+
+/* ── TABS ── */
+.tab-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.tab-bar {
+  display: flex; background: var(--white);
+  border-bottom: 1px solid var(--gray2); padding: 0 1.5rem;
+}
+.tab-btn {
+  padding: 10px 18px; font-size: 13px; font-weight: 600;
+  color: var(--gray4); background: none; border: none; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: all .15s; letter-spacing: .01em;
+}
+.tab-btn:hover { color: var(--black); }
+.tab-btn.active { color: var(--black); border-bottom-color: var(--red); }
+.tab-panel { display: none; padding: 1.25rem 1.5rem; overflow-y: auto; flex: 1; }
+.tab-panel.active { display: block; }
+
+/* ── TABLES ── */
+.rsec {
+  border: 1px solid var(--gray2); background: var(--white);
+  margin-bottom: 1rem;
+}
+.rhd {
+  padding: 8px 14px; border-bottom: 1px solid var(--gray2);
+  display: flex; align-items: center; gap: 8px; background: var(--off);
+}
+.rtitle { font-size: 14px; font-weight: 700; color: var(--black); letter-spacing: .01em; }
+.rbadge {
+  font-size: 10px; padding: 2px 8px;
+  background: var(--red3); color: var(--red);
+  border: 1px solid #f5c6c2; font-family: var(--mono);
+}
+.twrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+thead th {
+  background: var(--gray1); padding: 7px 10px; text-align: right;
+  color: var(--gray5); font-size: 12px; font-weight: 600;
+  border-bottom: 1px solid var(--gray2); white-space: nowrap;
+  letter-spacing: .03em;
+}
+thead th:first-child { text-align: left; }
+tbody td {
+  padding: 6px 10px; text-align: right; color: var(--black);
+  border-bottom: 1px solid var(--gray1); white-space: nowrap; font-weight: 500;
+}
+tbody td:first-child { text-align: left; color: var(--gray5); font-weight: 700; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--off); }
+tfoot td {
+  padding: 7px 10px; text-align: right; font-weight: 600;
+  border-top: 2px solid var(--gray2); color: var(--black);
+  background: var(--gray1);
+}
+tfoot td:first-child { text-align: left; }
+.gn { color: var(--grn); }
+.yw { color: var(--amb); }
+.zt { color: var(--gray3); }
+.rd { color: var(--red); font-weight: 500; }
+
+/* ── CHARTS ── */
+.chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+.chart-grid-1 { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem; }
+.ccard { border: 1px solid var(--gray2); background: var(--white); }
+.chead {
+  padding: 8px 14px; border-bottom: 1px solid var(--gray2);
+  background: var(--off); display: flex; align-items: center; justify-content: space-between;
+}
+.ctitle { font-size: 14px; font-weight: 700; color: var(--black); }
+.cbody { padding: 14px; }
+.legend {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  padding: 4px 14px 10px; font-size: 12px; color: var(--gray5); font-weight: 600;
+}
+.lg { display: flex; align-items: center; gap: 5px; }
+.lg-sq { width: 10px; height: 10px; flex-shrink: 0; }
+.ph { padding: 3rem; text-align: center; color: var(--gray4); }
+
+/* ── SNAPSHOT ── */
+.snap-btn {
+  background: transparent; border: 1px solid var(--black); color: var(--black);
+  padding: 8px 16px; font-size: 13px; font-weight: 600; font-family: var(--sans);
+  cursor: pointer; transition: all .15s; letter-spacing: .01em;
+}
+.snap-btn:hover { background: var(--black); color: var(--white); }
+.snap-btn:disabled { border-color: var(--gray3); color: var(--gray3); cursor: not-allowed; }
+.snap-panel {
+  display: none; border-bottom: 3px solid var(--red);
+  background: var(--white);
+}
+.snap-panel.visible { display: block; }
+.snap-inner {
+  padding: 12px 1.5rem;
+  display: flex; align-items: center; gap: 0;
+}
+.snap-title {
+  font-size: 13px; font-weight: 800; letter-spacing: .06em;
+  color: var(--black); text-transform: uppercase; margin-right: 16px;
+  white-space: nowrap;
+}
+.snap-cards {
+  display: grid; grid-template-columns: repeat(5,1fr); flex: 1; gap: 0;
+  border: 1px solid var(--gray2);
+}
+.snap-card {
+  padding: 10px 14px; border-right: 1px solid var(--gray2);
+  background: var(--white); position: relative;
+}
+.snap-card:last-child { border-right: none; }
+.snap-lbl { font-size: 12px; font-weight: 700; color: var(--gray5); margin-bottom: 4px; }
+.snap-val { font-size: 16px; font-weight: 800; font-family: var(--mono); color: var(--gray5); }
+.snap-diff {
+  font-size: 13px; font-weight: 800; font-family: var(--mono);
+  margin-top: 3px;
+}
+.snap-diff.better { color: var(--grn); }
+.snap-diff.worse  { color: var(--red); }
+.snap-diff.same   { color: var(--gray4); }
+.snap-label-tag {
+  font-size: 11px; padding: 3px 8px; font-weight: 700; letter-spacing: .04em;
+  margin-right: 6px; border: 1px solid;
+}
+.snap-label-tag.before { border-color: var(--gray3); color: var(--gray4); background: var(--off); }
+.snap-label-tag.after  { border-color: var(--red); color: var(--red); background: var(--red3); }
+.snap-clear {
+  background: transparent; border: none; color: var(--gray4);
+  font-size: 12px; cursor: pointer; padding: 4px 8px; margin-left: 12px;
+  text-decoration: underline; white-space: nowrap;
+}
+.snap-clear:hover { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-left">
+    <span class="hdr-title">총괄생산계획 최적화</span>
+    <span class="hdr-sub">Aggregate Production Planning · LP Solver</span>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-stat">
+      <span class="hdr-stat-lbl">OBJ. VALUE</span>
+      <span class="hdr-stat-val" id="hCost">—</span>
+    </div>
+    <div class="divider"></div>
+    <div class="hdr-stat">
+      <span class="hdr-stat-lbl">SOLVE TIME</span>
+      <span class="hdr-stat-val" id="hTime">—</span>
+    </div>
+    <div class="divider"></div>
+    <div class="hdr-stat">
+      <span class="hdr-stat-lbl">STATUS</span>
+      <span class="hdr-stat-val" id="hStatus">READY</span>
+    </div>
+    <div class="divider"></div>
+    <button class="snap-btn" id="snapBtn" onclick="saveSnapshot()" disabled>현재 결과 저장</button><button class="run-btn" id="runBtn" onclick="runSolve()">최적화 실행</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="side">
+    <div class="sec">
+      <div class="sec-hd">월별 예상수요 (개)</div>
+      <div id="dg"></div>
+      <div class="m-ctrl">
+        <button class="ibtn" onclick="rmMonth()">−</button>
+        <span class="m-cnt" id="mcnt">T = 6</span>
+        <button class="ibtn" onclick="addMonth()">+</button>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-hd">비용 파라미터 (천원)</div>
+      <div class="pg">
+        <div class="pi"><span class="pl">정규임금 <span class="pu">(/hr)</span></span><input class="p-inp" id="pw" type="number" value="4" step="0.1" min="0"></div>
+        <div class="pi"><span class="pl">초과근무 <span class="pu">(/hr)</span></span><input class="p-inp" id="po" type="number" value="6" step="0.1" min="0"></div>
+        <div class="pi"><span class="pl">고용비용 <span class="pu">(/인)</span></span><input class="p-inp" id="ph" type="number" value="300" min="0"></div>
+        <div class="pi"><span class="pl">해고비용 <span class="pu">(/인)</span></span><input class="p-inp" id="pl" type="number" value="500" min="0"></div>
+        <div class="pi"><span class="pl">재고유지 <span class="pu">(/개/월)</span></span><input class="p-inp" id="pi" type="number" value="2" step="0.1" min="0"></div>
+        <div class="pi"><span class="pl">부재고비 <span class="pu">(/개/월)</span></span><input class="p-inp" id="ps" type="number" value="5" step="0.1" min="0"></div>
+        <div class="pi"><span class="pl">재료비 <span class="pu">(/개)</span></span><input class="p-inp" id="pp" type="number" value="10" min="0"></div>
+        <div class="pi"><span class="pl">하청비용 <span class="pu">(/개)</span></span><input class="p-inp" id="pc" type="number" value="30" min="0"></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-hd">생산 파라미터</div>
+      <div class="pg">
+        <div class="pi"><span class="pl">초기 W₀ <span class="pu">(명)</span></span><input class="p-inp" id="pw0" type="number" value="80" min="0"></div>
+        <div class="pi"><span class="pl">작업일수 <span class="pu">(일/월)</span></span><input class="p-inp" id="pdays" type="number" value="20" min="1"></div>
+        <div class="pi"><span class="pl">작업시간 <span class="pu">(hr/일)</span></span><input class="p-inp" id="phrs" type="number" value="8" min="1"></div>
+        <div class="pi"><span class="pl">표준시간 <span class="pu">(hr/개)</span></span><input class="p-inp" id="pstd" type="number" value="4" step="0.5" min="0.1"></div>
+        <div class="pi"><span class="pl">잔업한도 <span class="pu">(hr/인/월)</span></span><input class="p-inp" id="potmax" type="number" value="10" min="0"></div>
+        <div class="pi"><span class="pl">초기재고 I₀ <span class="pu">(개)</span></span><input class="p-inp" id="pi0" type="number" value="1000" min="0"></div>
+        <div class="pi"><span class="pl">최종최소재고 <span class="pu">(개)</span></span><input class="p-inp" id="piT" type="number" value="500" min="0"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- KPI -->
+    
+<!-- SNAPSHOT COMPARE PANEL -->
+<div class="snap-panel" id="snapPanel">
+  <div class="snap-inner">
+    <div class="snap-title">비교</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-right:12px;white-space:nowrap">
+      <span class="snap-label-tag before">저장</span>
+      <span style="font-size:11px;color:var(--gray4)" id="snapParamLabel">—</span>
+    </div>
+    <div class="snap-cards" id="snapCards"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:12px;white-space:nowrap">
+      <span class="snap-label-tag after">현재</span>
+    </div>
+    <button class="snap-clear" onclick="clearSnapshot()">초기화</button>
+  </div>
+</div>
+<div class="snap-bar-label" id="snapBarLabel"></div><div class="kpi-strip" id="kpiStrip">
+      <div class="kcard" id="kc0"><div class="klbl">최소 총비용 (천원)</div><div class="kval" id="kv0">—</div><div class="ktag" id="kt0">대기중</div></div>
+      <div class="kcard" id="kc1"><div class="klbl">총 생산량 (개)</div><div class="kval" id="kv1">—</div><div class="ktag" id="kt1">대기중</div></div>
+      <div class="kcard" id="kc2"><div class="klbl">최종 재고 (개)</div><div class="kval" id="kv2">—</div><div class="ktag" id="kt2">대기중</div></div>
+      <div class="kcard" id="kc3"><div class="klbl">총 외주량 (개)</div><div class="kval" id="kv3">—</div><div class="ktag" id="kt3">대기중</div></div>
+      <div class="kcard" id="kc4"><div class="klbl">총 부재고 (개)</div><div class="kval" id="kv4">—</div><div class="ktag" id="kt4">대기중</div></div>
+    </div>
+
+    <!-- SIGNAL -->
+    <div class="sig-row">
+      <div class="sig">
+        <div class="sig-dot off" id="sl0"></div>
+        <div>
+          <div class="sig-lbl">SERVICE LEVEL</div>
+          <div class="sig-val off" id="sv0">—</div>
+          <div class="sig-desc" id="sd0">수요 충족률</div>
+        </div>
+      </div>
+      <div class="sig">
+        <div class="sig-dot off" id="sl1"></div>
+        <div>
+          <div class="sig-lbl">INVENTORY TARGET</div>
+          <div class="sig-val off" id="sv1">—</div>
+          <div class="sig-desc" id="sd1">최종재고 목표 달성</div>
+        </div>
+      </div>
+      <div class="sig">
+        <div class="sig-dot off" id="sl2"></div>
+        <div>
+          <div class="sig-lbl">WORKFORCE STABILITY</div>
+          <div class="sig-val off" id="sv2">—</div>
+          <div class="sig-desc" id="sd2">인력 변동 횟수</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tab-wrap">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(0)">생산계획표</button>
+        <button class="tab-btn" onclick="switchTab(1)">수요 / 생산 / 재고</button>
+        <button class="tab-btn" onclick="switchTab(2)">비용 분석</button>
+        <button class="tab-btn" onclick="switchTab(3)">인력 분석</button>
+      </div>
+
+      <!-- TAB 1 -->
+      <div class="tab-panel active" id="tp0">
+        <div class="rsec">
+          <div class="rhd"><span class="rtitle">월별 총괄생산계획 결과표</span><span class="rbadge">LP 최적해</span></div>
+          <div class="twrap" id="mt"><div class="ph">최적화를 실행하면 결과가 표시됩니다.</div></div>
+        </div>
+        <div class="rsec" id="csec" style="display:none">
+          <div class="rhd"><span class="rtitle">월별 비용 분해표</span><span class="rbadge">단위: 천원</span></div>
+          <div class="twrap" id="ct"></div>
+        </div>
+      </div>
+
+      <!-- TAB 2 -->
+      <div class="tab-panel" id="tp1">
+        <div class="chart-grid-1">
+          <div class="ccard">
+            <div class="chead"><span class="ctitle">수요 vs 생산량 (개)</span></div>
+            <div class="cbody"><div style="position:relative;height:220px"><canvas id="ch_dp"></canvas></div></div>
+            <div class="legend">
+              <div class="lg"><div class="lg-sq" style="background:#c0392b"></div>수요(D)</div>
+              <div class="lg"><div class="lg-sq" style="background:#1a56db"></div>생산(P)</div>
+              <div class="lg"><div class="lg-sq" style="background:#d97706"></div>외주(C)</div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-grid-1">
+          <div class="ccard">
+            <div class="chead"><span class="ctitle">재고 / 부재고 추이 (개)</span></div>
+            <div class="cbody"><div style="position:relative;height:200px"><canvas id="ch_inv"></canvas></div></div>
+            <div class="legend">
+              <div class="lg"><div class="lg-sq" style="background:#1a56db"></div>재고(I)</div>
+              <div class="lg"><div class="lg-sq" style="background:#c0392b"></div>부재고(S)</div>
+              <div class="lg"><div class="lg-sq" style="background:#d97706;opacity:.5"></div>최소재고 기준</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3 -->
+      <div class="tab-panel" id="tp2">
+        <div class="chart-grid-1">
+          <div class="ccard">
+            <div class="chead"><span class="ctitle">월별 비용 구성 (천원)</span></div>
+            <div class="cbody"><div style="position:relative;height:240px"><canvas id="ch_cs"></canvas></div></div>
+            <div class="legend">
+              <div class="lg"><div class="lg-sq" style="background:#e63946"></div>노동비</div>
+              <div class="lg"><div class="lg-sq" style="background:#f4922a"></div>재료비</div>
+              <div class="lg"><div class="lg-sq" style="background:#f7c948"></div>재고비</div>
+              <div class="lg"><div class="lg-sq" style="background:#3cb56a"></div>부재고비</div>
+              <div class="lg"><div class="lg-sq" style="background:#2563eb"></div>고용/해고비</div>
+              <div class="lg"><div class="lg-sq" style="background:#9333ea"></div>잔업/하청비</div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-grid-2">
+          <div class="ccard">
+            <div class="chead"><span class="ctitle">비용 항목별 구성비</span></div>
+            <div class="cbody"><div style="position:relative;height:200px"><canvas id="ch_pie"></canvas></div></div>
+          </div>
+          <div class="ccard">
+            <div class="chead"><span class="ctitle">누적 비용 (천원)</span></div>
+            <div class="cbody"><div style="position:relative;height:200px"><canvas id="ch_cum"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4 -->
+      <div class="tab-panel" id="tp3">
+        <div class="chart-grid-1">
+          <div class="ccard">
+            <div class="chead"><span class="ctitle">인력 변동 (명)</span></div>
+            <div class="cbody"><div style="position:relative;height:220px"><canvas id="ch_wf"></canvas></div></div>
+            <div class="legend">
+              <div class="lg"><div class="lg-sq" style="background:#111318"></div>종업원(W)</div>
+              <div class="lg"><div class="lg-sq" style="background:#1a7f4b"></div>고용(H)</div>
+              <div class="lg"><div class="lg-sq" style="background:#d97706"></div>해고(L)</div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-grid-1">
+          <div class="ccard">
+            <div class="chead"><span class="ctitle">월별 잔업 시간 (시간)</span></div>
+            <div class="cbody"><div style="position:relative;height:180px"><canvas id="ch_ot"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ── TABS ── */
+function switchTab(i){
+  document.querySelectorAll('.tab-btn').forEach(function(b,j){b.classList.toggle('active',j===i);});
+  document.querySelectorAll('.tab-panel').forEach(function(p,j){p.classList.toggle('active',j===i);});
+}
+
+/* ── DEMAND UI ── */
+var D=[1600,3000,3200,3800,2200,2200];
+function renderDG(){
+  var h='';
+  for(var i=0;i<D.length;i++)
+    h+='<div class="d-row"><span class="d-lbl">'+(i+1)+'월</span>'
+      +'<input class="d-inp" type="number" value="'+D[i]+'" min="0" data-i="'+i
+      +'" onchange="D[+this.dataset.i]=Math.max(0,+this.value||0)"></div>';
+  document.getElementById('dg').innerHTML=h;
+  document.getElementById('mcnt').textContent='T = '+D.length;
+}
+function addMonth(){D.push(2000);renderDG();}
+function rmMonth(){if(D.length<=2)return;D.pop();renderDG();}
+renderDG();
+
+function gv(id){return parseFloat(document.getElementById(id).value)||0;}
+function getP(){
+  var w=gv('pw'),d=gv('pdays'),h=gv('phrs'),s=gv('pstd');
+  return{wC:w*h*d,oC:gv('po'),hC:gv('ph'),lC:gv('pl'),
+    iC:gv('pi'),sC:gv('ps'),pC:gv('pp'),cC:gv('pc'),
+    prodPW:(h*d)/s,otFac:1/s,otMax:gv('potmax'),
+    W0:gv('pw0'),I0:gv('pi0'),IT:gv('piT')};
+}
+
+/* ── SIMPLEX ── */
+function simplex(c,Aub,bub,Aeq,beq,lo){
+  var EPS=1e-9,MAXIT=40000;
+  var n=c.length,nu=Aub.length,ne=Aeq.length;
+  var bub2=bub.slice(),beq2=beq.slice();
+  if(lo){for(var i=0;i<nu;i++)for(var j=0;j<n;j++)bub2[i]-=Aub[i][j]*(lo[j]||0);
+         for(var i=0;i<ne;i++)for(var j=0;j<n;j++)beq2[i]-=Aeq[i][j]*(lo[j]||0);}
+  var N=n+nu+ne,m=nu+ne,T=[],bas=[];
+  for(var i=0;i<nu;i++){var row=new Array(N+1).fill(0);for(var j=0;j<n;j++)row[j]=Aub[i][j];row[n+i]=1;row[N]=bub2[i];if(row[N]<-EPS){for(var j=0;j<=N;j++)row[j]=-row[j];}T.push(row);bas.push(n+i);}
+  for(var i=0;i<ne;i++){var row=new Array(N+1).fill(0);for(var j=0;j<n;j++)row[j]=Aeq[i][j];row[n+nu+i]=1;row[N]=beq2[i];if(row[N]<-EPS){for(var j=0;j<=N;j++)row[j]=-row[j];}T.push(row);bas.push(n+nu+i);}
+  function pivot(r,c){var pv=T[r][c];for(var j=0;j<=N;j++)T[r][j]/=pv;for(var i=0;i<m;i++){if(i===r)continue;var f=T[i][c];if(Math.abs(f)<EPS)continue;for(var j=0;j<=N;j++)T[i][j]-=f*T[r][j];}bas[r]=c;}
+  function phase(obj,colMax){for(var it=0;it<MAXIT;it++){var enter=-1,minRC=0;for(var j=0;j<colMax;j++){var rc=obj[j]||0;for(var i=0;i<m;i++)rc-=(obj[bas[i]]||0)*T[i][j];if(rc<-EPS&&rc<minRC){minRC=rc;enter=j;}}if(enter<0)break;var leave=-1,minR=Infinity;for(var i=0;i<m;i++){if(T[i][enter]>EPS){var r=T[i][N]/T[i][enter];if(r<minR-EPS){minR=r;leave=i;}}}if(leave<0)return false;pivot(leave,enter);}return true;}
+  var p1=new Array(N).fill(0);for(var i=0;i<ne;i++)p1[n+nu+i]=1;phase(p1,N);
+  for(var i=0;i<m;i++)if(bas[i]>=n+nu&&T[i][N]>1e-6)return null;
+  var p2=new Array(N).fill(0);for(var j=0;j<n;j++)p2[j]=c[j];phase(p2,n+nu);
+  var x=new Array(n).fill(0);for(var i=0;i<m;i++)if(bas[i]<n)x[bas[i]]=T[i][N];
+  if(lo)for(var j=0;j<n;j++)x[j]+=(lo[j]||0);
+  var cost=0;for(var j=0;j<n;j++)cost+=c[j]*x[j];
+  return{x:x,cost:cost};
+}
+
+/* ── LP MODEL ── */
+function buildAndSolve(Darr,p){
+  var TH=Darr.length;
+  var iW=function(t){return t-1;},iH=function(t){return TH+t-1;},iL=function(t){return 2*TH+t-1;},
+      iP=function(t){return 3*TH+t-1;},iI=function(t){return 4*TH+t-1;},
+      iS=function(t){return 5*TH+t-1;},iC=function(t){return 6*TH+t-1;},iO=function(t){return 7*TH+t-1;};
+  var N=8*TH,zr=function(){return new Array(N).fill(0);};
+  var c=new Array(N).fill(0);
+  for(var t=1;t<=TH;t++){c[iW(t)]=p.wC;c[iH(t)]=p.hC;c[iL(t)]=p.lC;c[iP(t)]=p.pC;c[iI(t)]=p.iC;c[iS(t)]=p.sC;c[iC(t)]=p.cC;c[iO(t)]=p.oC;}
+  var Aub=[],bub=[],Aeq=[],beq=[],r;
+  for(var t=1;t<=TH;t++){
+    r=zr();r[iW(t)]=1;r[iH(t)]=-1;r[iL(t)]=1;
+    if(t===1){Aeq.push(r);beq.push(p.W0);}else{r[iW(t-1)]=-1;Aeq.push(r);beq.push(0);}
+    r=zr();r[iP(t)]=1;r[iW(t)]=-p.prodPW;r[iO(t)]=-p.otFac;Aub.push(r);bub.push(0);
+    r=zr();r[iI(t)]=-1;r[iP(t)]=1;r[iC(t)]=1;r[iS(t)]=1;
+    if(t===1){Aeq.push(r);beq.push(Darr[0]-p.I0);}else{r[iI(t-1)]=1;r[iS(t-1)]=-1;Aeq.push(r);beq.push(Darr[t-1]);}
+    r=zr();r[iO(t)]=1;r[iW(t)]=-p.otMax;Aub.push(r);bub.push(0);
+  }
+  r=zr();r[iS(TH)]=1;Aeq.push(r);beq.push(0);
+  var lo=new Array(N).fill(0);lo[iI(TH)]=p.IT;
+  return simplex(c,Aub,bub,Aeq,beq,lo);
+}
+
+/* ── CHARTS ── */
+var charts={};
+function mkChart(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id).getContext('2d'),cfg);}
+
+var baseScales={
+  x:{grid:{color:'rgba(0,0,0,.06)',lineWidth:.8},ticks:{color:'#4a5263',font:{family:"'IBM Plex Mono'",size:11,weight:'600'}},border:{color:'#c8cdd6'}},
+  y:{grid:{color:'rgba(0,0,0,.06)',lineWidth:.8},ticks:{color:'#4a5263',font:{family:"'IBM Plex Mono'",size:11,weight:'600'}},border:{color:'#c8cdd6'}}
+};
+var baseTip={backgroundColor:'rgba(17,19,24,.92)',borderColor:'rgba(0,0,0,.15)',borderWidth:1,titleColor:'#e2e6eb',bodyColor:'#ffffff',titleFont:{family:"'IBM Plex Mono'",size:11},bodyFont:{family:"'IBM Plex Mono'",size:11},padding:10};
+function bOpts(ex){return Object.assign({responsive:true,maintainAspectRatio:false,animation:{duration:500},plugins:{legend:{display:false},tooltip:baseTip},scales:baseScales},ex||{});}
+
+/* ── RENDER ── */
+function fv(v){return Math.abs(v)<0.05?'<span class="zt">—</span>':v.toFixed(1);}
+function fc(v){return Math.round(v).toLocaleString('ko-KR');}
+
+function render(plan,cost,p,_res){
+  var res_dummy={cost:cost};
+  var TH=plan.length,totD=0,totP=0,totC=0,totS=0;
+  plan.forEach(function(r){totD+=r.D;totP+=r.P+r.C;totC+=r.C;totS+=r.S;});
+  var finI=plan[TH-1].I;
+  var labels=plan.map(function(r){return r.t+'월';});
+
+  /* KPI */
+  function setK(i,val,tag,st){
+    document.getElementById('kv'+i).textContent=val;
+    document.getElementById('kv'+i).className='kval'+(st?' '+st:'');
+    document.getElementById('kt'+i).textContent=tag;
+    document.getElementById('kt'+i).className='ktag'+(st?' '+st:'');
+    document.getElementById('kc'+i).className='kcard'+(st?' '+st:'');
+  }
+  setK(0,fc(Math.round(cost)),'최솟값','ok');
+  var sr=Math.min(100,totP/totD*100);
+  setK(1,fc(Math.round(totP)),sr>=99.9?'수요 충족':'⚠ 수요 미달',sr>=99.9?'ok':'bad');
+  setK(2,fc(Math.round(finI)),finI>=p.IT?'목표 달성':'⚠ 목표 미달',finI>=p.IT?'ok':'bad');
+  setK(3,fc(Math.round(totC)),totC>0.05?'외주 발생':'외주 없음',totC>0.05?'warn':'ok');
+  setK(4,fc(Math.round(totS)),totS>0.05?'⚠ 부재고 발생':'정상',totS>0.05?'bad':'ok');
+
+  /* SIGNAL */
+  function setSig(i,st,val,desc){
+    document.getElementById('sl'+i).className='sig-dot '+st;
+    document.getElementById('sv'+i).className='sig-val '+st;
+    document.getElementById('sv'+i).textContent=val;
+    document.getElementById('sd'+i).textContent=desc;
+  }
+  setSig(0,sr>=99.9?'ok':'bad',sr.toFixed(1)+'%','수요충족률 '+(sr>=99.9?'정상':'미달'));
+  setSig(1,finI>=p.IT?'ok':'bad',fc(Math.round(finI))+'개','최종재고 '+(finI>=p.IT?'목표달성':'기준미달'));
+  var chg=plan.filter(function(r){return r.H>0.05||r.L>0.05;}).length;
+  setSig(2,chg<=2?'ok':chg<=4?'warn':'bad',chg+'회','인력변동 '+(chg<=2?'안정':'불안정'));
+
+  /* HEADER */
+  var hc=document.getElementById('hCost');
+  hc.textContent=fc(Math.round(cost))+' 천원';hc.className='hdr-stat-val ok';
+  document.getElementById('hStatus').textContent='OPTIMAL';
+  document.getElementById('hStatus').className='hdr-stat-val ok';
+
+  /* TABLE 1 */
+  var rows='',tH=0,tL=0,tP=0,tO=0;
+  plan.forEach(function(r){
+    tH+=r.H;tL+=r.L;tP+=r.P;tO+=r.O;
+    rows+='<tr><td>'+r.t+'월</td><td>'+r.D.toLocaleString()+'</td>'
+      +'<td>'+fv(r.W)+'</td>'
+      +'<td class="'+(r.H>0.05?'gn':'')+'">'+fv(r.H)+'</td>'
+      +'<td class="'+(r.L>0.05?'yw':'')+'">'+fv(r.L)+'</td>'
+      +'<td>'+fv(r.P)+'</td>'
+      +'<td class="'+(r.C>0.05?'yw':'')+'">'+fv(r.C)+'</td>'
+      +'<td>'+fv(r.O)+'</td>'
+      +'<td class="'+(r.I<p.IT*1.05&&r.t===TH?'yw':'')+'">'+fv(r.I)+'</td>'
+      +'<td class="'+(r.S>0.05?'rd':'')+'">'+fv(r.S)+'</td></tr>';
+  });
+  document.getElementById('mt').innerHTML=
+    '<table><thead><tr><th>기간</th><th>수요(D)</th><th>종업원(W)</th><th>고용(H)</th><th>해고(L)</th>'
+    +'<th>생산(P)</th><th>외주(C)</th><th>잔업(O)</th><th>재고(I)</th><th>부재고(S)</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'<tfoot><tr><td>합계</td><td>'+totD.toLocaleString()+'</td><td>—</td>'
+    +'<td>'+tH.toFixed(1)+'</td><td>'+tL.toFixed(1)+'</td>'
+    +'<td>'+tP.toFixed(1)+'</td><td>'+totC.toFixed(1)+'</td>'
+    +'<td>'+tO.toFixed(1)+'</td><td>—</td><td>'+totS.toFixed(1)+'</td>'
+    +'</tr></tfoot></table>';
+
+  /* TABLE 2 */
+  var crow='',tW=0,tO2=0,thC=0,tlC=0,tpC=0,tiC=0,tsC=0,tcC=0;
+  plan.forEach(function(r){
+    var cW=r.W*p.wC,cO=r.O*p.oC,cH=r.H*p.hC,cL=r.L*p.lC;
+    var cP=r.P*p.pC,cI=r.I*p.iC,cS=r.S*p.sC,cC=r.C*p.cC;
+    var tot=cW+cO+cH+cL+cP+cI+cS+cC;
+    tW+=cW;tO2+=cO;thC+=cH;tlC+=cL;tpC+=cP;tiC+=cI;tsC+=cS;tcC+=cC;
+    crow+='<tr><td>'+r.t+'월</td><td>'+fc(cW)+'</td>'
+      +'<td class="'+(cO>0?'yw':'')+'">'+fc(cO)+'</td>'
+      +'<td class="'+(cH>0?'gn':'')+'">'+fc(cH)+'</td>'
+      +'<td class="'+(cL>0?'yw':'')+'">'+fc(cL)+'</td>'
+      +'<td>'+fc(cP)+'</td><td>'+fc(cI)+'</td>'
+      +'<td class="'+(cS>0?'rd':'')+'">'+fc(cS)+'</td>'
+      +'<td class="'+(cC>0?'yw':'')+'">'+fc(cC)+'</td>'
+      +'<td><b>'+fc(tot)+'</b></td></tr>';
+  });
+  document.getElementById('ct').innerHTML=
+    '<table><thead><tr><th>기간</th><th>노동비</th><th>잔업비</th><th>고용비</th>'
+    +'<th>해고비</th><th>재료비</th><th>재고비</th><th>부재고비</th><th>하청비</th><th>합계</th></tr></thead>'
+    +'<tbody>'+crow+'</tbody>'
+    +'<tfoot><tr><td>합계</td>'
+    +'<td>'+fc(tW)+'</td><td>'+fc(tO2)+'</td><td>'+fc(thC)+'</td><td>'+fc(tlC)+'</td>'
+    +'<td>'+fc(tpC)+'</td><td>'+fc(tiC)+'</td><td>'+fc(tsC)+'</td><td>'+fc(tcC)+'</td>'
+    +'<td><b>'+fc(Math.round(cost))+'</b></td></tr></tfoot></table>';
+  document.getElementById('csec').style.display='';
+
+  /* CHART 1: Demand vs Prod */
+  mkChart('ch_dp',{type:'bar',data:{labels:labels,datasets:[
+    {label:'수요(D)',data:plan.map(function(r){return r.D;}),backgroundColor:'rgba(192,57,43,.65)',borderColor:'#c0392b',borderWidth:2},
+    {label:'생산(P)',data:plan.map(function(r){return r.P;}),backgroundColor:'rgba(26,86,219,.65)',borderColor:'#1a56db',borderWidth:2},
+    {label:'외주(C)',data:plan.map(function(r){return r.C;}),backgroundColor:'rgba(217,119,6,.65)',borderColor:'#d97706',borderWidth:2},
+  ]},options:bOpts()});
+
+  /* CHART 2: Inventory */
+  var invDatasets=[
+    {label:'재고(I)',data:plan.map(function(r){return r.I;}),borderColor:'#1a56db',backgroundColor:'rgba(26,86,219,.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#fff',pointBorderColor:'#1a56db',pointBorderWidth:2,fill:true,tension:.35},
+    {label:'부재고(S)',data:plan.map(function(r){return r.S;}),borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,.08)',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#fff',pointBorderColor:'#c0392b',pointBorderWidth:2,fill:true,tension:.35},
+    {label:'최소재고',data:plan.map(function(){return p.IT;}),borderColor:'#d97706',borderWidth:1.5,borderDash:[6,4],pointRadius:0,fill:false},
+  ];
+  if(snapshot&&snapPlan){
+    invDatasets.push({label:'[저장] 재고',data:snapPlan.map(function(r){return r.I;}),borderColor:'#1a56db',borderWidth:2,borderDash:[6,4],pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:'#1a56db',pointBorderWidth:2,fill:false,tension:.35});
+    invDatasets.push({label:'[저장] 부재고',data:snapPlan.map(function(r){return r.S;}),borderColor:'#c0392b',borderWidth:2,borderDash:[6,4],pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:'#c0392b',pointBorderWidth:2,fill:false,tension:.35});
+  }
+  mkChart('ch_inv',{type:'line',data:{labels:labels,datasets:invDatasets
+},options:bOpts()});
+
+  /* CHART 3: Cost stack */
+  mkChart('ch_cs',{type:'bar',data:{labels:labels,datasets:[
+    {label:'노동비',data:plan.map(function(r){return Math.round(r.W*p.wC);}),backgroundColor:'rgba(230,57,70,.65)',borderColor:'#e63946',borderWidth:2,stack:'s'},
+    {label:'재료비',data:plan.map(function(r){return Math.round(r.P*p.pC);}),backgroundColor:'rgba(244,146,42,.65)',borderColor:'#f4922a',borderWidth:2,stack:'s'},
+    {label:'재고비',data:plan.map(function(r){return Math.round(r.I*p.iC);}),backgroundColor:'rgba(247,201,72,.65)',borderColor:'#f7c948',borderWidth:2,stack:'s'},
+    {label:'부재고비',data:plan.map(function(r){return Math.round(r.S*p.sC);}),backgroundColor:'rgba(60,181,106,.65)',borderColor:'#3cb56a',borderWidth:2,stack:'s'},
+    {label:'고용/해고',data:plan.map(function(r){return Math.round(r.H*p.hC+r.L*p.lC);}),backgroundColor:'rgba(37,99,235,.65)',borderColor:'#2563eb',borderWidth:2,stack:'s'},
+    {label:'잔업/하청',data:plan.map(function(r){return Math.round(r.O*p.oC+r.C*p.cC);}),backgroundColor:'rgba(147,51,234,.65)',borderColor:'#9333ea',borderWidth:2,stack:'s'},
+  ]},options:bOpts({scales:{x:{stacked:true,grid:{color:'rgba(0,0,0,.06)'},ticks:{color:'#4a5263',font:{family:"'IBM Plex Mono'",size:11,weight:'600'}},border:{color:'#c8cdd6'}},y:{stacked:true,grid:{color:'rgba(0,0,0,.06)'},ticks:{color:'#4a5263',font:{family:"'IBM Plex Mono'",size:11,weight:'600'}},border:{color:'#c8cdd6'}}}})});
+
+  /* CHART 4: Pie */
+  var tW2=0,tO3=0,thC2=0,tlC2=0,tpC2=0,tiC2=0,tsC2=0,tcC2=0;
+  plan.forEach(function(r){tW2+=r.W*p.wC;tO3+=r.O*p.oC;thC2+=r.H*p.hC;tlC2+=r.L*p.lC;tpC2+=r.P*p.pC;tiC2+=r.I*p.iC;tsC2+=r.S*p.sC;tcC2+=r.C*p.cC;});
+  mkChart('ch_pie',{type:'doughnut',data:{
+    labels:['노동비','재료비','재고비','부재고비','고용/해고','잔업/하청'],
+    datasets:[{data:[tW2,tpC2,tiC2,tsC2,thC2+tlC2,tO3+tcC2],
+      backgroundColor:['rgba(230,57,70,.65)','rgba(244,146,42,.65)','rgba(247,201,72,.65)','rgba(60,181,106,.65)','rgba(37,99,235,.65)','rgba(147,51,234,.65)'],
+      borderColor:['#e63946','#f4922a','#f7c948','#3cb56a','#2563eb','#9333ea'],borderWidth:1.5}]
+  },options:{responsive:true,maintainAspectRatio:false,animation:{duration:500},cutout:'58%',
+    plugins:{legend:{display:true,position:'right',labels:{color:'#111318',font:{family:"'IBM Plex Mono'",size:12,weight:'600'},boxWidth:12,padding:10}},
+      tooltip:baseTip}}});
+
+  /* CHART 5: Cumulative */
+  var cum=0,cumData=plan.map(function(r){cum+=r.W*p.wC+r.H*p.hC+r.L*p.lC+r.P*p.pC+r.I*p.iC+r.S*p.sC+r.C*p.cC+r.O*p.oC;return Math.round(cum);});
+  mkChart('ch_cum',{type:'line',data:{labels:labels,datasets:[{
+    label:'누적비용',data:cumData,borderColor:'#111318',backgroundColor:'rgba(17,19,24,.06)',
+    borderWidth:2.5,fill:true,tension:.4,pointRadius:5,pointBackgroundColor:'#fff',pointBorderColor:'#111318',pointBorderWidth:2,
+  }]},options:bOpts()});
+
+  /* CHART 6: Workforce */
+  var wfDatasets=[
+    {label:'종업원(W)',data:plan.map(function(r){return r.W;}),type:'line',borderColor:'#111318',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#fff',pointBorderColor:'#111318',pointBorderWidth:2,fill:false,tension:.3,order:1},
+    {label:'고용(H)',data:plan.map(function(r){return r.H;}),backgroundColor:'rgba(26,127,75,.65)',borderColor:'#1a7f4b',borderWidth:2,order:2},
+    {label:'해고(L)',data:plan.map(function(r){return -r.L;}),backgroundColor:'rgba(217,119,6,.65)',borderColor:'#d97706',borderWidth:2,order:2},
+  ];
+  if(snapshot&&snapPlan){
+    wfDatasets.push({label:'[저장] 종업원',data:snapPlan.map(function(r){return r.W;}),type:'line',borderColor:'#111318',borderWidth:2,borderDash:[6,4],pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:'#111318',pointBorderWidth:2,fill:false,tension:.3,order:1});
+  }
+  mkChart('ch_wf',{type:'bar',data:{labels:labels,datasets:wfDatasets},options:{responsive:true,maintainAspectRatio:false,animation:{duration:500},plugins:{legend:{display:false},tooltip:baseTip},scales:{x:{grace:'15%',grid:{color:'rgba(0,0,0,.06)',lineWidth:.8},ticks:{color:'#4a5263',font:{family:"'IBM Plex Mono'",size:11,weight:'600'}},border:{color:'#c8cdd6'}},y:{grace:'15%',grid:{color:'rgba(0,0,0,.06)',lineWidth:.8},ticks:{color:'#4a5263',font:{family:"'IBM Plex Mono'",size:11,weight:'600'}},border:{color:'#c8cdd6'}}}}});
+
+  /* store for snapshot */
+  window._lastPlan=plan;window._lastResult=res_dummy;window._lastP=p;
+  document.getElementById('snapBtn').disabled=false;
+  if(snapshot) updateSnapPanel();
+
+  /* CHART 7: Overtime */
+  mkChart('ch_ot',{type:'bar',data:{labels:labels,datasets:[{
+    label:'잔업(O)',data:plan.map(function(r){return r.O;}),
+    backgroundColor:'rgba(26,86,219,.65)',borderColor:'#1a56db',borderWidth:2,
+  }]},options:bOpts()});
+}
+
+/* ── RUN ── */
+function runSolve(){
+  var btn=document.getElementById('runBtn');
+  btn.textContent='계산 중...';btn.disabled=true;
+  document.getElementById('hStatus').textContent='RUNNING';
+  document.getElementById('hStatus').className='hdr-stat-val warn';
+  var t0=Date.now();
+  setTimeout(function(){
+    var p=getP(),Darr=D.slice(),res=buildAndSolve(Darr,p);
+    var dt=((Date.now()-t0)/1000).toFixed(3)+'s';
+    document.getElementById('hTime').textContent=dt;
+    if(!res){
+      document.getElementById('hStatus').textContent='ERROR';
+      document.getElementById('hStatus').className='hdr-stat-val err';
+      btn.textContent='최적화 실행';btn.disabled=false;return;
+    }
+    var x=res.x,TH=Darr.length,plan=[];
+    for(var t=1;t<=TH;t++){
+      var iW=t-1,iH=TH+t-1,iL=2*TH+t-1,iP=3*TH+t-1,iI=4*TH+t-1,iS=5*TH+t-1,iC=6*TH+t-1,iO=7*TH+t-1;
+      plan.push({t:t,D:Darr[t-1],W:Math.max(0,x[iW]),H:Math.max(0,x[iH]),L:Math.max(0,x[iL]),
+        P:Math.max(0,x[iP]),I:Math.max(0,x[iI]),S:Math.max(0,x[iS]),C:Math.max(0,x[iC]),O:Math.max(0,x[iO])});
+    }
+    render(plan,res.cost,p,res);
+    btn.textContent='다시 실행';btn.disabled=false;
+  },60);
+}
+
+/* ── SNAPSHOT ── */
+var snapshot = null;
+var snapPlan = null;
+
+function saveSnapshot(){
+  if(!window._lastPlan) return;
+  snapshot = JSON.parse(JSON.stringify(window._lastResult));
+  snapPlan = JSON.parse(JSON.stringify(window._lastPlan));
+  window._snapP = JSON.parse(JSON.stringify(window._lastP));
+  document.getElementById('snapBtn').textContent = '저장됨 ✓';
+  document.getElementById('snapBtn').style.borderColor = 'var(--grn)';
+  document.getElementById('snapBtn').style.color = 'var(--grn)';
+  // 파라미터 라벨
+  var p = window._lastP;
+  document.getElementById('snapParamLabel').textContent =
+    '총비용 ' + fc(Math.round(snapshot.cost)) + ' 천원';
+  updateSnapPanel();
+}
+
+function clearSnapshot(){
+  snapshot = null; snapPlan = null;
+  document.getElementById('snapPanel').classList.remove('visible');
+  document.getElementById('snapBtn').textContent = '현재 결과 저장';
+  document.getElementById('snapBtn').style.borderColor = '';
+  document.getElementById('snapBtn').style.color = '';
+  // 차트 점선 제거 후 재렌더
+  if(window._lastPlan && window._lastResult) render(window._lastPlan, window._lastResult.cost, window._lastP, window._lastResult);
+}
+
+function updateSnapPanel(){
+  if(!snapshot || !window._lastResult) return;
+  var panel = document.getElementById('snapPanel');
+  panel.classList.add('visible');
+
+  var s = snapshot, c = window._lastResult;
+  var sp = window._snapP, cp = window._lastP;
+  var sPlan = snapPlan, cPlan = window._lastPlan;
+
+  var sTotP=0,sTotS=0,cTotP=0,cTotS=0;
+  sPlan.forEach(function(r){sTotP+=r.P+r.C;sTotS+=r.S;});
+  cPlan.forEach(function(r){cTotP+=r.P+r.C;cTotS+=r.S;});
+  var sFinI=sPlan[sPlan.length-1].I, cFinI=cPlan[cPlan.length-1].I;
+  var sChg=sPlan.filter(function(r){return r.H>0.05||r.L>0.05;}).length;
+  var cChg=cPlan.filter(function(r){return r.H>0.05||r.L>0.05;}).length;
+
+  var items = [
+    {lbl:'총비용 (천원)', sv:fc(Math.round(s.cost)), cv:fc(Math.round(c.cost)), diff: s.cost - c.cost, betterIfPositive:true},
+    {lbl:'총 생산량 (개)', sv:fc(Math.round(sTotP)), cv:fc(Math.round(cTotP)), diff: cTotP - sTotP, betterIfPositive:true},
+    {lbl:'최종 재고 (개)', sv:fc(Math.round(sFinI)), cv:fc(Math.round(cFinI)), diff: cFinI - sFinI, betterIfPositive:true},
+    {lbl:'총 부재고 (개)', sv:fc(Math.round(sTotS)), cv:fc(Math.round(cTotS)), diff: sTotS - cTotS, betterIfPositive:true},
+    {lbl:'인력변동 (회)', sv:sChg+'회', cv:cChg+'회', diff: sChg - cChg, betterIfPositive:true},
+  ];
+
+  var html2 = '';
+  items.forEach(function(it){
+    var d = it.diff;
+    var cls = Math.abs(d)<0.5 ? 'same' : (it.betterIfPositive ? (d>0?'better':'worse') : (d<0?'better':'worse'));
+    var arrow = Math.abs(d)<0.5 ? '—' : (d>0 ? '▲ ' : '▼ ');
+    // 총비용은 반대 (낮을수록 좋음)
+    if(it.lbl.indexOf('총비용')>=0){
+      cls = Math.abs(d)<0.5 ? 'same' : (d>0?'better':'worse');
+      arrow = Math.abs(d)<0.5 ? '—' : (d>0 ? '▼ ' : '▲ ');
+    }
+    // 부재고도 반대
+    if(it.lbl.indexOf('부재고')>=0){
+      cls = Math.abs(d)<0.5 ? 'same' : (d>0?'better':'worse');
+    }
+    var diffVal = Math.abs(d)<0.5 ? '변화없음' : arrow + (it.lbl.indexOf('회')>=0 ? Math.abs(d).toFixed(0)+'회' : fc(Math.round(Math.abs(d))));
+    html2 += '<div class="snap-card">'
+      + '<div class="snap-lbl">'+it.lbl+'</div>'
+      + '<div style="display:flex;align-items:baseline;gap:8px">'
+      + '<span style="font-size:13px;font-weight:600;color:var(--gray4);font-family:var(--mono)">'+it.sv+'</span>'
+      + '<span style="font-size:13px;font-weight:700;color:var(--gray3)">→</span>'
+      + '<span style="font-size:17px;font-weight:800;font-family:var(--mono);color:var(--black)">'+it.cv+'</span>'
+      + '</div>'
+      + '<div class="snap-diff '+cls+'">'+diffVal+'</div>'
+      + '</div>';
+  });
+  document.getElementById('snapCards').innerHTML = html2;
+}
+
+</script>
+</body>
+</html>
